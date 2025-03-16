@@ -85,7 +85,7 @@ class MiniCam:
 
 
 class GUI:
-    def __init__(self, args, dataset, opt, pipe, testing_iterations, saving_iterations) -> None:
+    def __init__(self, args, dataset, opt, pipe, testing_iterations, saving_iterations, load_iteration=None) -> None:
         self.dataset = dataset
         self.args = args
         self.opt = opt
@@ -96,9 +96,11 @@ class GUI:
         self.tb_writer = prepare_output_and_logger(dataset)
         self.gaussians = GaussianModel(dataset.sh_degree)
         self.deform = DeformModel(is_blender=dataset.is_blender, is_6dof=dataset.is_6dof)
+        if load_iteration is not None:
+            self.deform.load_weights(dataset.model_path, iteration=load_iteration)
         self.deform.train_setting(opt)
 
-        self.scene = Scene(dataset, self.gaussians)
+        self.scene = Scene(dataset, self.gaussians, load_iteration=load_iteration)
         self.gaussians.training_setup(opt)
 
         bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
@@ -106,13 +108,13 @@ class GUI:
 
         self.iter_start = torch.cuda.Event(enable_timing=True)
         self.iter_end = torch.cuda.Event(enable_timing=True)
-        self.iteration = 1
+        self.iteration = 1 if load_iteration is None else load_iteration + 1
 
         self.viewpoint_stack = None
         self.ema_loss_for_log = 0.0
         self.best_psnr = 0.0
         self.best_iteration = 0
-        self.progress_bar = tqdm.tqdm(range(opt.iterations), desc="Training progress")
+        self.progress_bar = tqdm.tqdm(range(opt.iterations), desc="Training progress", initial=self.iteration - 1)
         self.smooth_term = get_linear_noise_func(lr_init=0.1, lr_final=1e-15, lr_delay_mult=0.01, max_steps=20000)
 
         # For UI
@@ -777,6 +779,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_iterations", nargs="+", type=int,
                         default=[5000, 6000, 7_000] + list(range(10000, 40001, 1000)))
     parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 10_000, 20_000, 30_000, 40000])
+    parser.add_argument("--load_iteration", type=int, default=None)
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
@@ -790,7 +793,8 @@ if __name__ == "__main__":
     # network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
     gui = GUI(args=args, dataset=lp.extract(args), opt=op.extract(args), pipe=pp.extract(args),
-              testing_iterations=args.test_iterations, saving_iterations=args.save_iterations)
+              testing_iterations=args.test_iterations, saving_iterations=args.save_iterations,
+              load_iteration=args.load_iteration)
 
     if args.gui:
         gui.render()
