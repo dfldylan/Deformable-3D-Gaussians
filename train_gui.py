@@ -479,6 +479,56 @@ class GUI:
                 button=dpg.mvMouseButton_Middle, callback=callback_camera_drag_pan
             )
 
+            # 添加键盘控制
+            def callback_keyboard_control(sender, app_data):
+                if not dpg.is_item_focused("_primary_window"):
+                    return
+
+                key = app_data
+                print(f"Key pressed: {key}")  # 调试输出，显示按下的键的键码
+
+                # 旋转控制 - 方向键 (macOS键码可能不同)
+                # 反转方向使其更加自然
+                rotation_speed = 20.0
+                if key == 265 or key == 126:  # 上箭头 (macOS: 126)
+                    self.cam.orbit(0, rotation_speed)  # 反转方向
+                    self.need_update = True
+                elif key == 264 or key == 125:  # 下箭头 (macOS: 125)
+                    self.cam.orbit(0, -rotation_speed)  # 反转方向
+                    self.need_update = True
+                elif key == 263 or key == 123:  # 左箭头 (macOS: 123)
+                    self.cam.orbit(rotation_speed, 0)  # 反转方向
+                    self.need_update = True
+                elif key == 262 or key == 124:  # 右箭头 (macOS: 124)
+                    self.cam.orbit(-rotation_speed, 0)  # 反转方向
+                    self.need_update = True
+
+                # 缩放控制 - 多种键选项
+                scale_speed = 0.1
+                if key == 61 or key == 93 or key == 43 or key == 24:  # +/=键 (macOS: 24)
+                    self.cam.scale(scale_speed)
+                    self.need_update = True
+                elif key == 45 or key == 91 or key == 95 or key == 27:  # -/_键 (macOS: 27)
+                    self.cam.scale(-scale_speed)
+                    self.need_update = True
+
+                # 平移控制 - WASD
+                pan_speed = 100.0  # 增加平移速度至原来的10倍
+                if key == 87 or key == 119 or key == 13:  # W (macOS: 13 或 119)
+                    self.cam.pan(0, pan_speed)
+                    self.need_update = True
+                elif key == 83 or key == 115 or key == 1:  # S (macOS: 1 或 115)
+                    self.cam.pan(0, -pan_speed)
+                    self.need_update = True
+                elif key == 65 or key == 97 or key == 0:  # A (macOS: 0 或 97)
+                    self.cam.pan(pan_speed, 0)
+                    self.need_update = True
+                elif key == 68 or key == 100 or key == 2:  # D (macOS: 2 或 100)
+                    self.cam.pan(-pan_speed, 0)
+                    self.need_update = True
+
+            dpg.add_key_press_handler(callback=callback_keyboard_control)
+
         dpg.create_viewport(
             title="Deformable-Gaussian",
             width=self.W + 600,
