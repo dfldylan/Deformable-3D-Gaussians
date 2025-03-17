@@ -10,25 +10,25 @@
 #
 
 import os
-import time
-import torch
-from random import randint
-from utils.loss_utils import l1_loss, ssim, kl_divergence
-from gaussian_renderer import render, network_gui
 import sys
-from scene import Scene, GaussianModel, DeformModel
-from utils.general_utils import safe_state, get_linear_noise_func
+import time
 import uuid
-import tqdm
-from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
-from arguments import ModelParams, PipelineParams, OptimizationParams
-from train import training_report
-import math
-from utils.gui_utils import orbit_camera, OrbitCamera
-import numpy as np
-import dearpygui.dearpygui as dpg
+from random import randint
 
+import dearpygui.dearpygui as dpg
+import math
+import numpy as np
+import torch
+import tqdm
+
+from arguments import ModelParams, PipelineParams, OptimizationParams
+from gaussian_renderer import render, network_gui
+from scene import Scene, GaussianModel, DeformModel
+from train import training_report
+from utils.general_utils import safe_state, get_linear_noise_func
+from utils.gui_utils import OrbitCamera
+from utils.loss_utils import l1_loss, ssim
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -118,7 +118,7 @@ class GUI:
         # For UI
         self.visualization_mode = 'RGB'
 
-        self.gui = args.gui # enable gui
+        self.gui = args.gui  # enable gui
         self.W = args.W
         self.H = args.H
         self.cam = OrbitCamera(args.W, args.H, r=args.radius, fovy=args.fovy)
@@ -131,8 +131,8 @@ class GUI:
         if self.gui:
             dpg.create_context()
             self.register_dpg()
-            self.test_step()    
-        
+            self.test_step()
+
     def __del__(self):
         if self.gui:
             dpg.destroy_context()
@@ -151,13 +151,13 @@ class GUI:
         ### register window
         # the rendered image, as the primary window
         with dpg.window(
-            tag="_primary_window",
-            width=self.W,
-            height=self.H,
-            pos=[0, 0],
-            no_move=True,
-            no_title_bar=True,
-            no_scrollbar=True,
+                tag="_primary_window",
+                width=self.W,
+                height=self.H,
+                pos=[0, 0],
+                no_move=True,
+                no_title_bar=True,
+                no_scrollbar=True,
         ):
             # add the texture
             dpg.add_image("_texture")
@@ -166,13 +166,13 @@ class GUI:
 
         # control window
         with dpg.window(
-            label="Control",
-            tag="_control_window",
-            width=600,
-            height=self.H,
-            pos=[self.W, 0],
-            no_move=True,
-            no_title_bar=True,
+                label="Control",
+                tag="_control_window",
+                width=600,
+                height=self.H,
+                pos=[self.W, 0],
+                no_move=True,
+                no_title_bar=True,
         ):
             # button theme
             with dpg.theme() as theme_button:
@@ -216,13 +216,13 @@ class GUI:
                     self.need_update = True
 
                 with dpg.file_dialog(
-                    directory_selector=False,
-                    show=False,
-                    callback=callback_select_input,
-                    file_count=1,
-                    tag="file_dialog_tag",
-                    width=700,
-                    height=400,
+                        directory_selector=False,
+                        show=False,
+                        callback=callback_select_input,
+                        file_count=1,
+                        tag="file_dialog_tag",
+                        width=700,
+                        height=400,
                 ):
                     dpg.add_file_extension("Images{.jpg,.jpeg,.png}")
 
@@ -244,16 +244,18 @@ class GUI:
                             print("Visualize node features" if self.node_vis_fea else "Visualize node importance")
                             if self.node_vis_fea or True:
                                 from motion import visualize_featuremap
-                                if True:  #self.renderer.gaussians.motion_model.soft_edge:
+                                if True:  # self.renderer.gaussians.motion_model.soft_edge:
                                     if hasattr(self.renderer.gaussians.motion_model, 'nodes_fea'):
-                                        node_rgb = visualize_featuremap(self.renderer.gaussians.motion_model.nodes_fea.detach().cpu().numpy())
+                                        node_rgb = visualize_featuremap(
+                                            self.renderer.gaussians.motion_model.nodes_fea.detach().cpu().numpy())
                                         self.node_rgb = torch.from_numpy(node_rgb).cuda()
                                     else:
                                         self.node_rgb = None
                                 else:
                                     self.node_rgb = None
                             else:
-                                node_imp = self.renderer.gaussians.motion_model.cal_node_importance(x=self.renderer.gaussians.get_xyz)
+                                node_imp = self.renderer.gaussians.motion_model.cal_node_importance(
+                                    x=self.renderer.gaussians.get_xyz)
                                 node_imp = (node_imp - node_imp.min()) / (node_imp.max() - node_imp.min())
                                 node_rgb = torch.zeros([node_imp.shape[0], 3], dtype=torch.float32).cuda()
                                 node_rgb[..., 0] = node_imp
@@ -293,6 +295,7 @@ class GUI:
 
                     def callback_use_const_var(sender, app_data):
                         self.use_const_var = not self.use_const_var
+
                     dpg.add_button(
                         label="Const Var",
                         tag="_button_const_var",
@@ -302,9 +305,11 @@ class GUI:
 
                 with dpg.group(horizontal=True):
                     dpg.add_text("Scale Const: ")
+
                     def callback_vis_scale_const(sender):
                         self.vis_scale_const = 10 ** dpg.get_value(sender)
                         self.need_update = True
+
                     dpg.add_slider_float(
                         label="Log vis_scale_const (For debugging)",
                         default_value=-3,
@@ -317,9 +322,11 @@ class GUI:
                 with dpg.group(horizontal=True):
                     dpg.add_text("Temporal Speed: ")
                     self.video_speed = 1.
+
                     def callback_speed_control(sender):
                         self.video_speed = dpg.get_value(sender)
                         self.need_update = True
+
                     dpg.add_slider_float(
                         label="Play speed",
                         default_value=1.,
@@ -327,7 +334,7 @@ class GUI:
                         min_value=0.0,
                         callback=callback_speed_control,
                     )
-                
+
                 # save current model
                 with dpg.group(horizontal=True):
                     dpg.add_text("Save: ")
@@ -369,6 +376,7 @@ class GUI:
 
                     def call_back_save_train(sender, app_data, user_data):
                         self.render_all_train_data()
+
                     dpg.add_button(
                         label="save_train",
                         tag="_button_save_train",
@@ -457,7 +465,7 @@ class GUI:
 
             self.cam.pan(dx, dy)
             self.need_update = True
-                
+
         with dpg.handler_registry():
             # for camera moving
             dpg.add_mouse_drag_handler(
@@ -513,13 +521,12 @@ class GUI:
                 self.train_step()
             self.test_step()
             dpg.render_dearpygui_frame()
-    
+
     # no gui mode
     def train(self, iters=5000):
         if iters > 0:
             for i in tqdm.trange(iters):
                 self.train_step()
-    
 
     def train_step(self):
         if network_gui.conn == None:
@@ -529,9 +536,10 @@ class GUI:
                 net_image_bytes = None
                 custom_cam, do_training, self.pipe.do_shs_python, self.pipe.do_cov_python, keep_alive, scaling_modifer = network_gui.receive()
                 if custom_cam != None:
-                    net_image = render(custom_cam, self.gaussians, self.pipe, self.background, scaling_modifer)["render"]
+                    net_image = render(custom_cam, self.gaussians, self.pipe, self.background, scaling_modifer)[
+                        "render"]
                     net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2,
-                                                                                                            0).contiguous().cpu().numpy())
+                                                                                                               0).contiguous().cpu().numpy())
                 network_gui.send(net_image_bytes, self.dataset.source_path)
                 if do_training and ((self.iteration < int(self.opt.iterations)) or not keep_alive):
                     break
@@ -561,11 +569,14 @@ class GUI:
         else:
             N = self.gaussians.get_xyz.shape[0]
             time_input = fid.unsqueeze(0).expand(N, -1)
-            ast_noise = 0 if self.dataset.is_blender else torch.randn(1, 1, device='cuda').expand(N, -1) * time_interval * self.smooth_term(self.iteration)
+            ast_noise = 0 if self.dataset.is_blender else torch.randn(1, 1, device='cuda').expand(N,
+                                                                                                  -1) * time_interval * self.smooth_term(
+                self.iteration)
             d_xyz, d_rotation, d_scaling = self.deform.step(self.gaussians.get_xyz.detach(), time_input + ast_noise)
 
         # Render
-        render_pkg_re = render(viewpoint_cam, self.gaussians, self.pipe, self.background, d_xyz, d_rotation, d_scaling, self.dataset.is_6dof)
+        render_pkg_re = render(viewpoint_cam, self.gaussians, self.pipe, self.background, d_xyz, d_rotation, d_scaling,
+                               self.dataset.is_6dof)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg_re["render"], render_pkg_re[
             "viewspace_points"], render_pkg_re["visibility_filter"], render_pkg_re["radii"]
         # depth = render_pkg_re["depth"]
@@ -591,10 +602,14 @@ class GUI:
                 self.progress_bar.close()
 
             # Keep track of max radii in image-space for pruning
-            self.gaussians.max_radii2D[visibility_filter] = torch.max(self.gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
+            self.gaussians.max_radii2D[visibility_filter] = torch.max(self.gaussians.max_radii2D[visibility_filter],
+                                                                      radii[visibility_filter])
 
             # Log and save
-            cur_psnr = training_report(self.tb_writer, self.iteration, Ll1, loss, l1_loss, self.iter_start.elapsed_time(self.iter_end), self.testing_iterations, self.scene, render, (self.pipe, self.background), self.deform, self.dataset.load2gpu_on_the_fly, self.dataset.is_6dof)
+            cur_psnr = training_report(self.tb_writer, self.iteration, Ll1, loss, l1_loss,
+                                       self.iter_start.elapsed_time(self.iter_end), self.testing_iterations, self.scene,
+                                       render, (self.pipe, self.background), self.deform,
+                                       self.dataset.load2gpu_on_the_fly, self.dataset.is_6dof)
             if self.iteration in self.testing_iterations:
                 if cur_psnr.item() > self.best_psnr:
                     self.best_psnr = cur_psnr.item()
@@ -611,7 +626,8 @@ class GUI:
 
                 if self.iteration > self.opt.densify_from_iter and self.iteration % self.opt.densification_interval == 0:
                     size_threshold = 20 if self.iteration > self.opt.opacity_reset_interval else None
-                    self.gaussians.densify_and_prune(self.opt.densify_grad_threshold, 0.005, self.scene.cameras_extent, size_threshold)
+                    self.gaussians.densify_and_prune(self.opt.densify_grad_threshold, 0.005, self.scene.cameras_extent,
+                                                     size_threshold)
 
                 if self.iteration % self.opt.opacity_reset_interval == 0 or (
                         self.dataset.white_background and self.iteration == self.opt.densify_from_iter):
@@ -640,7 +656,7 @@ class GUI:
                 "_log_train_log",
                 f"step = {self.iteration: 5d} loss = {loss.item():.4f}",
             )
-    
+
     @torch.no_grad()
     def test_step(self):
 
@@ -660,7 +676,8 @@ class GUI:
             self.cam.fovx,
             self.cam.near,
             self.cam.far,
-            fid=torch.remainder(torch.tensor((time.time()-self.t0) * self.fps_of_fid).float().cuda() / len(self.scene.getTrainCameras()), 1.)
+            fid=torch.remainder(torch.tensor((time.time() - self.t0) * self.fps_of_fid).float().cuda() / len(
+                self.scene.getTrainCameras()), 1.)
         )
         fid = cur_cam.fid
 
@@ -670,8 +687,9 @@ class GUI:
             N = self.gaussians.get_xyz.shape[0]
             time_input = fid.unsqueeze(0).expand(N, -1)
             d_xyz, d_rotation, d_scaling = self.deform.step(self.gaussians.get_xyz.detach(), time_input)
-        
-        out = render(viewpoint_camera=cur_cam, pc=self.gaussians, pipe=self.pipe, bg_color=self.background, d_xyz=d_xyz, d_rotation=d_rotation, d_scaling=d_scaling, is_6dof=self.dataset.is_6dof)
+
+        out = render(viewpoint_camera=cur_cam, pc=self.gaussians, pipe=self.pipe, bg_color=self.background, d_xyz=d_xyz,
+                     d_rotation=d_rotation, d_scaling=d_scaling, is_6dof=self.dataset.is_6dof)
 
         buffer_image = out[self.mode]  # [3, H, W]
 
@@ -704,7 +722,7 @@ class GUI:
         t = starter.elapsed_time(ender)
 
         if self.gui:
-            dpg.set_value("_log_infer_time", f"{t:.4f}ms ({int(1000/t)} FPS FID: {fid.item()})")
+            dpg.set_value("_log_infer_time", f"{t:.4f}ms ({int(1000 / t)} FPS FID: {fid.item()})")
             dpg.set_value(
                 "_texture", self.buffer_image
             )  # buffer must be contiguous, else seg fault!
@@ -713,7 +731,8 @@ class GUI:
     def train(self, iters=5000):
         if iters > 0:
             for i in tqdm.trange(iters):
-                self.train_step()        
+                self.train_step()
+
 
 def prepare_output_and_logger(args):
     if not args.model_path:
@@ -744,7 +763,7 @@ if __name__ == "__main__":
     lp = ModelParams(parser)
     op = OptimizationParams(parser)
     pp = PipelineParams(parser)
-    
+
     parser.add_argument('--gui', action='store_false', help="start a GUI")
     parser.add_argument('--W', type=int, default=800, help="GUI width")
     parser.add_argument('--H', type=int, default=800, help="GUI height")
@@ -770,12 +789,13 @@ if __name__ == "__main__":
     # Start GUI server, configure and run training
     # network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    gui = GUI(args=args, dataset=lp.extract(args), opt=op.extract(args), pipe=pp.extract(args),testing_iterations=args.test_iterations, saving_iterations=args.save_iterations)
+    gui = GUI(args=args, dataset=lp.extract(args), opt=op.extract(args), pipe=pp.extract(args),
+              testing_iterations=args.test_iterations, saving_iterations=args.save_iterations)
 
     if args.gui:
         gui.render()
     # else:
     #     gui.train(args.iterations)
-    
+
     # All done
     print("\nTraining complete.")
